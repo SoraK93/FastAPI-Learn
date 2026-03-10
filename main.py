@@ -1,28 +1,31 @@
 from enum import Enum
 from fastapi import FastAPI, Path, Query
-from pydantic import AfterValidator, BaseModel
-from typing import Any, Annotated
+from pydantic import AfterValidator, BaseModel, Field
+from typing import Any, Annotated, Literal
 import random
-
-
-class ModelName(str, Enum):
-    alexnet = "alexnet"
-    resnet = "resnet"
-    lenet = "lenet"
-
-
-class Item(BaseModel):
-    name: str
-    description: str | None = None
-    price: float
-    tax: float | None = None
-
 
 app = FastAPI(
     title="My First FastAPI - App",
     version="0.2.0",
     description="This is a project I am building to learn FastAPI"
 )
+
+
+class FilterParams(BaseModel):
+    model_config = {"extra": "forbid"}
+    limit: int = Field(100, gt=0, le=100)
+    offset: int = Field(0, ge=0)
+    order_by: Literal["created_at", "updated_at"] = "created_at"
+    tags: list[str] = []
+
+
+@app.get("/items/query-model/")
+async def query_model(filterArray: Annotated[FilterParams, Query()]):
+    """Query Parameter Model
+    We have defined all our queries in a 
+    """
+    return filterArray
+
 
 fake_items_db = [{"item_name": "Foo"}, {
     "item_name": "Bar"}, {"item_name": "Baz"}]
@@ -41,14 +44,21 @@ def check_valid_id(id: str):
     return id
 
 
-@app.get("/items/{item_id}", tags=["items"])
-async def read_items(
+@app.get("/items/query/path/string-numeric-validator", tags=["items"])
+async def read_items_id(
     item_id: Annotated[str, Path(title="The ID of the item to get"), AfterValidator(check_valid_id)],
-    q: Annotated[str | None, Query(alias="item-query")] = None
+    price: Annotated[float, Query(alias="item-price", gt=0)],
+    quantity: Annotated[int | None, Query(
+        alias="item-quantity", gt=0, le=100)] = None,
 ) -> dict[str, Any]:
-    results: dict[str, int | str | None] = {"item_id": item_id}
-    if q:
-        results["q"] = q
+    """
+    Practicing Annotated, Query & Path & related attributes, AfterValidator
+    """
+    results: dict[str, Any] = {"item_id": item_id}
+    if quantity:
+        results["quantity"] = quantity
+    if price:
+        results["price"] = price
     if item_id:
         results["data"] = data.get(item_id)
     else:
@@ -77,7 +87,14 @@ async def read_items_query(
     return results
 
 
-@app.post("/items/", tags=["items"])
+class Item(BaseModel):
+    name: str
+    description: str | None = None
+    price: float
+    tax: float | None = None
+
+
+@app.post("/items-p/", tags=["items"])
 async def create_item(item: Item):
     item_dict = item.model_dump()
     if item.tax is not None:
@@ -110,6 +127,12 @@ async def read_user_item(user_id: int, item_id: str, q: str | None = None, short
             {"description": "This is an amazing item that has a long description"}
         )
     return item
+
+
+class ModelName(str, Enum):
+    alexnet = "alexnet"
+    resnet = "resnet"
+    lenet = "lenet"
 
 
 @app.get("/models/{model_name}", tags=["models"])
